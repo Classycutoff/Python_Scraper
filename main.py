@@ -96,6 +96,8 @@ is_last = False
 chapter_url = first_chapter_url
 chap_links = []
 chap_number = 1
+prev_link = ""
+prev_path = ""
 
 path_regex = '\?|\*|&|"'
 
@@ -131,9 +133,13 @@ while not is_last:
         )
 
         if content["previous_link"]:
-            f.write(f'- **[Previous]({content["previous_link"]})**')
-        if content["next_link"]:
-            f.write(f'- **[Next]({content["next_link"]})**')
+            f.write(f"- **[Previous]({prev_link})**\n")
+            with open(prev_path, "a", encoding="utf-8") as prev_f:
+                prev_f.write(f"- **[Next]({f'{chap_file_name}.md'})**")
+        prev_link = f"{chap_file_name}.md"
+        prev_path = os.path.join(chapters_path, f"{chap_file_name}.md")
+        # if content["next_link"]:
+        #     f.write(f'- **[Next]({content["next_link"]})**')
 
     if not is_last:
         chapter_url = content["next_link"]
@@ -144,6 +150,6 @@ print("Chapters done")
 with open(os.path.join(novel_path, "README.md"), "a", encoding="utf-8") as f:
     for i in range(len(chap_links)):
         chap_title, chap_link = chap_links[i]
-        f.write(f"- **{i + 1}. [{chap_title}]({chap_link}.md)**\n")
+        f.write(f"- **{i + 1}. [{chap_title}](chapters\{chap_link}.md)**\n")
 
 print("README.md complete")
