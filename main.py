@@ -2,10 +2,11 @@ import requests
 from bs4 import BeautifulSoup
 import os
 import re
+import time
 
 NOVEL_URL = input("Input the novel URL: ").strip()
 # NOVEL_PATH = input("Input the novel PATH: ").strip()
-NOVEL_PATH = "D:\Royal_Road"
+NOVEL_PATH = "D:\Books\Royal_Road"
 
 ROYAL_URL = "https://www.royalroad.com"
 response = requests.get(NOVEL_URL)
@@ -17,7 +18,10 @@ soup = BeautifulSoup(response.text, "html.parser")
 
 novel_author = soup.h4.find("a").text
 novel_desc = soup.find("div", attrs={"class": "description"}).text.strip()
-novel_title = soup.title.text
+try:
+    novel_title = soup.title.text
+except AttributeError as e:
+    novel_title = NOVEL_URL.split("/")[-1]
 novel_tags = [
     f"**{tag.text}**"
     for tag in soup.find("span", attrs={"class": "tags"}).find_all("a")
@@ -32,9 +36,12 @@ try:
     os.mkdir(chapters_path)
 except OSError as error:
     print("Directory already there")
-with open(os.path.join(novel_path, "README.md"), "w", encoding="utf-8") as f:
-    f.write(
-        f"""# {novel_title}
+
+if not os.path.isfile(os.path.join(novel_path, "README.md")):
+
+    with open(os.path.join(novel_path, "README.md"), "w", encoding="utf-8") as f:
+        f.write(
+            f"""# {novel_title}
 
 ------------
 
@@ -49,7 +56,7 @@ with open(os.path.join(novel_path, "README.md"), "w", encoding="utf-8") as f:
 
 ------------
 """
-    )
+        )
 
 
 # [{title: chap1, author_note: note1, content: text1, previous_link: link1, next_link: link2}]
@@ -101,55 +108,72 @@ prev_path = ""
 
 path_regex = '\?|\*|&|"'
 
+print_count = 0
+
 # [{title: chap1, author_note: note1, content: text1, previous_link: link1, next_link: link2}]
 while not is_last:
     content, is_last = get_chapter_contents(ROYAL_URL + chapter_url)
+    time.sleep(0.03)
     temp_chap_file_name = re.sub(path_regex, "", content["title"].replace(" ", "-"))
-    chap_file_name = (
-        str(chap_number).zfill(3) + "_" + temp_chap_file_name.replace(":", "_")
-    )
+    chap_file_name = temp_chap_file_name.replace(":", "_")
     chap_number += 1
     chap_links.append((content["title"], chap_file_name))
-    with open(
-        os.path.join(chapters_path, f"{chap_file_name}.md"), "w", encoding="utf-8"
-    ) as f:
-        f.write(f"# {content['title']}")
-        if "author_note" in content:
-            f.write(
-                f"""
+    file_path = os.path.join(chapters_path, f"{chap_file_name}.md")
+    file_path = file_path.replace("/", "")
+    with open(file_path, "w+", encoding="utf-8") as f:
+        if not os.path.isfile(file_path):
+            f.write(f"# {content['title']}")
+            if "author_note" in content:
+                f.write(
+                    f"""
 --------------
 ## Authors Comment
 
 {content['author_note']}"""
-            )
-        f.write(
-            f"""
+                )
+            f.write(
+                f"""
 --------------
 
 {content['content']}
 
 --------------
 """
-        )
+            )
 
         if content["previous_link"]:
             f.write(f"- **[Previous]({prev_link})**\n")
             with open(prev_path, "a", encoding="utf-8") as prev_f:
                 prev_f.write(f"- **[Next]({f'{chap_file_name}.md'})**")
         prev_link = f"{chap_file_name}.md"
-        prev_path = os.path.join(chapters_path, f"{chap_file_name}.md")
+        prev_path = file_path
         # if content["next_link"]:
         #     f.write(f'- **[Next]({content["next_link"]})**')
 
     if not is_last:
         chapter_url = content["next_link"]
+        print_count += 1
+        if print_count % 10 == 0:
+            print(f"{print_count} file: {file_path}")
 
 print("Chapters done")
 
+readme_regex = "- \*\*(\d+)\. \[(.*)\]\(.*\)\*\*"
+with open(os.path.join(novel_path, "README.md"), "r", encoding="utf-8") as f:
+    readme_str = f.read()
+
+found_all = re.findall(readme_regex, readme_str)
+index, chapter_names = zip(*found_all)
+biggest_ind = 1
 
 with open(os.path.join(novel_path, "README.md"), "a", encoding="utf-8") as f:
     for i in range(len(chap_links)):
         chap_title, chap_link = chap_links[i]
-        f.write(f"- **{i + 1}. [{chap_title}](chapters\{chap_link}.md)**\n")
+        if chap_title in chapter_names:
+            chap_name_index = chapter_names.index(chap_title)
+            biggest_ind = int(index[chap_name_index]) + 1
+            continue
+        f.write(f"- **{biggest_ind}. [{chap_title}](chapters\{chap_link}.md)**\n")
+        biggest_ind += 1
 
 print("README.md complete")
